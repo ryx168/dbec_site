@@ -11,9 +11,6 @@ name: diamondbarevergreen.com edit session
 on:
   workflow_dispatch:
     inputs:
-      fb_password:
-        description: "Password for this session's file manager login (username is 'conan')"
-        required: true
       idle_minutes:
         description: "Minutes of inactivity before the session shuts down"
         default: "15"
@@ -30,7 +27,7 @@ jobs:
       contents: write
     env:
       FB_USER: conan
-      FB_PASS: ${{ inputs.fb_password }}
+      FB_PASS: ${{ secrets.FB_PASS }}
       IDLE_MINUTES: ${{ inputs.idle_minutes }}
     steps:
       - uses: actions/checkout@v4
