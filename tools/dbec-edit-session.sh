@@ -24,9 +24,13 @@ command -v filebrowser || { echo "  FATAL: filebrowser still not found after ins
 echo "::endgroup::"
 
 echo "::group::Start filebrowser"
-filebrowser config init --root "$GITHUB_WORKSPACE" >/tmp/fb-init.log 2>&1
-filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin >/tmp/fb-user.log 2>&1
-filebrowser -a 127.0.0.1 -p 8080 --root "$GITHUB_WORKSPACE" >/tmp/filebrowser.log 2>&1 &
+# Keep filebrowser's own database OUT of the checkout: its default location is
+# the current directory, where the auto-push's `git add -A` would commit it
+# (and Cloudflare Pages would then publish it, bcrypt password hash included).
+FB_DB=/tmp/filebrowser.db
+filebrowser config init -d "$FB_DB" --root "$GITHUB_WORKSPACE" >/tmp/fb-init.log 2>&1
+filebrowser users add -d "$FB_DB" "$FB_USER" "$FB_PASS" --perm.admin >/tmp/fb-user.log 2>&1
+filebrowser -d "$FB_DB" -a 127.0.0.1 -p 8080 --root "$GITHUB_WORKSPACE" >/tmp/filebrowser.log 2>&1 &
 FB_PID=$!
 sleep 2
 if kill -0 "$FB_PID" 2>/dev/null; then

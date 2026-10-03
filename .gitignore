@@ -1,0 +1,3 @@
+# filebrowser runtime state - must never be committed (or Pages would publish it)
+filebrowser.db
+*.db
