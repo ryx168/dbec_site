@@ -55,7 +55,7 @@ async function sessionState() {
       const s = await raw.json().catch(() => null);
       if (s && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(s.url || "") &&
           Date.now() - Date.parse(s.since || 0) < SESSION_MAX_AGE_MS) {
-        return { state: "running", url: s.url };
+        return { state: "running", url: s.url, sftpHost: s.sftp_host || "", sftpPort: s.sftp_port || "" };
       }
     }
     return { state: "starting" };
@@ -71,9 +71,14 @@ function justStarted(url) {
 export async function onRequestGet({ request }) {
   const cur = await sessionState();
   if (cur.state === "running") {
+    const sftp = cur.sftpPort
+      ? `<p class="muted" style="margin-top:16px">也可用 SFTP 軟體（如 FileZilla）連線，適合大量檔案：<br>
+主機 <b>${cur.sftpHost}</b>　連接埠 <b>${cur.sftpPort}</b>　帳號 <b>conan</b><br>
+（連線類型選 <b>SFTP</b>；每次開啟編輯器主機與連接埠都會不同，請以此頁為準。）</p>`
+      : "";
     return page(`<h1>編輯器已開啟</h1><p>請點下方按鈕進入。登入帳號 <b>conan</b>，密碼為您收到的編輯器密碼。</p>
 <a class="go" href="${cur.url}" target="_blank" rel="noopener">進入編輯器</a>
-<p class="muted">閒置 15 分鐘後編輯器會自動關閉；修改會自動儲存，並在約 1 分鐘內更新到網站。</p>`);
+<p class="muted">閒置 15 分鐘後編輯器會自動關閉；修改會自動儲存，並在約 1 分鐘內更新到網站。</p>${sftp}`);
   }
   if (cur.state === "starting" || justStarted(request.url)) {
     const s = new URL(request.url).searchParams.get("s");
