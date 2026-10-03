@@ -66,11 +66,16 @@ echo "::group::Start SFTP (bore.pub)"
 SFTP_HOST=""; SFTP_PORT=""; BORE_PID=""
 sudo apt-get install -y -qq openssh-server acl >/dev/null 2>&1 || true
 ssh-keygen -q -t ed25519 -f /tmp/ssh_host_ed25519_key -N "" >/dev/null 2>&1 || true
-id conan >/dev/null 2>&1 || sudo useradd -m -s /bin/bash conan
+# conan's home IS the checkout, so an SFTP session starts there and uploads land
+# in the repo (and thus get auto-committed), not in a throwaway home dir.
+id conan >/dev/null 2>&1 || sudo useradd -M -d "$GITHUB_WORKSPACE" -s /bin/bash conan
+sudo usermod -d "$GITHUB_WORKSPACE" conan 2>/dev/null || true
 echo "conan:$FB_PASS" | sudo chpasswd
-# let conan read+write the checkout so SFTP uploads become commits (now + new files)
+# let conan read+write the checkout now and for files it creates later
 sudo setfacl -R  -m u:conan:rwX "$GITHUB_WORKSPACE" 2>/dev/null || true
 sudo setfacl -R -d -m u:conan:rwX "$GITHUB_WORKSPACE" 2>/dev/null || true
+# ensure every dir on the way to the checkout is searchable by conan
+d="$GITHUB_WORKSPACE"; while [ "$d" != "/" ]; do sudo chmod o+x "$d" 2>/dev/null || true; d=$(dirname "$d"); done
 sudo tee /tmp/sshd_config >/dev/null <<EOF
 Port 2222
 ListenAddress 127.0.0.1
@@ -83,7 +88,7 @@ PermitRootLogin no
 AllowUsers conan
 Subsystem sftp internal-sftp
 Match User conan
-    ForceCommand internal-sftp -d $GITHUB_WORKSPACE
+    ForceCommand internal-sftp
     AllowTcpForwarding no
     X11Forwarding no
     PermitTunnel no
