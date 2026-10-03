@@ -14,12 +14,19 @@ echo "::group::Install filebrowser + cloudflared"
 curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
 curl -fsSL -o /tmp/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
 chmod +x /tmp/cloudflared
+if ! command -v filebrowser >/dev/null 2>&1; then
+  echo "  filebrowser installer did not put it on PATH - checking common locations"
+  for p in /usr/local/bin/filebrowser ./filebrowser "$HOME/filebrowser"; do
+    if [ -x "$p" ]; then echo "  found at $p"; sudo ln -sf "$(realpath "$p")" /usr/local/bin/filebrowser; break; fi
+  done
+fi
+command -v filebrowser || { echo "  FATAL: filebrowser still not found after install"; exit 1; }
 echo "::endgroup::"
 
 echo "::group::Start filebrowser"
-./filebrowser config init --root "$GITHUB_WORKSPACE" >/tmp/fb-init.log 2>&1
-./filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin >/tmp/fb-user.log 2>&1
-./filebrowser -a 127.0.0.1 -p 8080 --root "$GITHUB_WORKSPACE" >/tmp/filebrowser.log 2>&1 &
+filebrowser config init --root "$GITHUB_WORKSPACE" >/tmp/fb-init.log 2>&1
+filebrowser users add "$FB_USER" "$FB_PASS" --perm.admin >/tmp/fb-user.log 2>&1
+filebrowser -a 127.0.0.1 -p 8080 --root "$GITHUB_WORKSPACE" >/tmp/filebrowser.log 2>&1 &
 FB_PID=$!
 sleep 2
 if kill -0 "$FB_PID" 2>/dev/null; then
