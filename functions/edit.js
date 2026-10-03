@@ -2,7 +2,7 @@
 // A Cloudflare Pages Function deployed with the site itself, so the customer
 // never leaves their own domain. No storage binding needed: the running
 // session's URL is read from the "session" branch of this (public) repo, where
-// tools/dbec-edit-session.sh publishes it; "starting" is detected from the
+// tools/dbec-edit-session.sh publishes it; a booting run is detected from the
 // public Actions API. No start password: opening the page starts a session
 // automatically (via an auto-submitted POST, so bots/link previews doing a
 // plain GET never trigger one). The editor itself has its own login.
@@ -12,6 +12,7 @@
 const REPO = "ryx168/dbec_site";
 const WORKFLOW = "dbec-edit-session.yml";
 const SESSION_MAX_AGE_MS = 6 * 3600 * 1000;
+const JUST_STARTED_MS = 120 * 1000;   // after a dispatch, don't auto-submit again for this long
 const GH_HEADERS = { "accept": "application/vnd.github+json", "user-agent": "dbec-edit-launcher" };
 
 function page(body, refresh) {
@@ -32,37 +33,52 @@ a.go{display:block;text-align:center;background:#188038;color:#fff;text-decorati
 
 const STARTING = `<h1>編輯器啟動中…</h1><div class="spin"></div><p>通常需要約 1 分鐘，此頁面會自動更新，請稍候。</p>`;
 
+// Newest run of the workflow, any status - GitHub reports brief "pending"/
+// "requested" states that a status-filtered query would miss.
+async function newestRun() {
+  const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?per_page=1`,
+    { headers: GH_HEADERS, cf: { cacheTtl: 0 } }).catch(() => null);
+  if (!r || !r.ok) return null;
+  const j = await r.json().catch(() => ({}));
+  return (j.workflow_runs || [])[0] || null;
+}
+
 async function sessionState() {
-  // 1) a published session URL on the "session" branch?
-  const raw = await fetch(`https://raw.githubusercontent.com/${REPO}/session/edit-session.json?t=${Date.now()}`,
-    { headers: GH_HEADERS, cf: { cacheTtl: 0, cacheEverything: false } }).catch(() => null);
-  if (raw && raw.ok) {
-    const s = await raw.json().catch(() => null);
-    if (s && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(s.url || "") &&
-        Date.now() - Date.parse(s.since || 0) < SESSION_MAX_AGE_MS) {
-      return { state: "running", url: s.url };
+  const run = await newestRun();
+  const runActive = !!run && run.status !== "completed";
+  // A published session URL only counts while its run is still alive -
+  // a cancelled/crashed runner never gets to delete the branch.
+  if (runActive) {
+    const raw = await fetch(`https://raw.githubusercontent.com/${REPO}/session/edit-session.json?t=${Date.now()}`,
+      { headers: GH_HEADERS, cf: { cacheTtl: 0, cacheEverything: false } }).catch(() => null);
+    if (raw && raw.ok) {
+      const s = await raw.json().catch(() => null);
+      if (s && /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(s.url || "") &&
+          Date.now() - Date.parse(s.since || 0) < SESSION_MAX_AGE_MS) {
+        return { state: "running", url: s.url };
+      }
     }
-  }
-  // 2) a run already in progress (booting)?
-  for (const status of ["in_progress", "queued"]) {
-    const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/runs?status=${status}&per_page=1`,
-      { headers: GH_HEADERS, cf: { cacheTtl: 0 } }).catch(() => null);
-    if (r && r.ok) {
-      const j = await r.json().catch(() => ({}));
-      if ((j.total_count || 0) > 0) return { state: "starting" };
-    }
+    return { state: "starting" };
   }
   return { state: "idle" };
 }
 
-export async function onRequestGet() {
+function justStarted(url) {
+  const s = Number(new URL(url).searchParams.get("s") || 0);
+  return s > 0 && Date.now() - s < JUST_STARTED_MS;
+}
+
+export async function onRequestGet({ request }) {
   const cur = await sessionState();
   if (cur.state === "running") {
     return page(`<h1>編輯器已開啟</h1><p>請點下方按鈕進入。登入帳號 <b>conan</b>，密碼為您收到的編輯器密碼。</p>
 <a class="go" href="${cur.url}" target="_blank" rel="noopener">進入編輯器</a>
 <p class="muted">閒置 15 分鐘後編輯器會自動關閉；修改會自動儲存，並在約 1 分鐘內更新到網站。</p>`);
   }
-  if (cur.state === "starting") return page(STARTING, 6);
+  if (cur.state === "starting" || justStarted(request.url)) {
+    const s = new URL(request.url).searchParams.get("s");
+    return page(STARTING, `6; url=/edit${s ? `?s=${encodeURIComponent(s)}` : ""}`);
+  }
   // idle: start automatically - the browser submits this form on load; a plain
   // GET (crawlers, link previews) stops here and starts nothing.
   return page(`<h1>鑽石吧長青會 網站編輯器</h1><div class="spin"></div><p>正在啟動編輯器…</p>
@@ -85,5 +101,7 @@ export async function onRequestPost({ request, env }) {
     const t = (await r.text()).slice(0, 300).replace(/</g, "&lt;");
     return page(`<h1>啟動失敗</h1><p class="err">GitHub 回應 ${r.status}</p><p class="muted">${t}</p><p><a href="/edit">重試</a></p>`);
   }
-  return page(STARTING, 6);
+  // Carry a timestamp so the follow-up GETs never show the auto-submit page
+  // during the few seconds before the API lists the new run.
+  return page(STARTING, `6; url=/edit?s=${Date.now()}`);
 }
