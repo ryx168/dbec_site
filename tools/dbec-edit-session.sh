@@ -63,6 +63,19 @@ echo "  username: $FB_USER"
 echo "  password: (the one you set when triggering this run)"
 echo "=========================================================="
 echo ""
+# Publish this session's URL on a side branch ("session": one JSON file) so the
+# launcher at www.diamondbarevergreen.com/edit (functions/edit.js in this repo)
+# can send visitors straight here. Plumbing commands only - nothing touches the
+# working tree that the auto-push stages, and main is never involved.
+publish_session() {
+  local blob tree commit
+  blob=$(printf '{"url":"%s","since":"%s"}\n' "$1" "$(date -u +%FT%TZ)" | git hash-object -w --stdin)
+  tree=$(printf '100644 blob %s\tedit-session.json\n' "$blob" | git mktree)
+  commit=$(git -c user.email=superesolutions@gmail.com -c user.name="dbec on-demand editor" commit-tree "$tree" -m "edit session $(date -u +%FT%TZ)")
+  git push -q -f origin "$commit:refs/heads/session" && echo "  session URL published for the launcher" \
+    || echo "  (launcher publish failed - session still usable via this log)"
+}
+publish_session "$TUNNEL_URL"
 echo "::endgroup::"
 
 git config user.email "superesolutions@gmail.com"
@@ -102,4 +115,5 @@ done
 echo "::group::Final push"
 push_changes
 echo "::endgroup::"
+git push -q origin --delete session 2>/dev/null || true
 echo "session ended"
