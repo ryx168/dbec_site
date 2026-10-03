@@ -1,0 +1,38 @@
+name: diamondbarevergreen.com edit session
+
+# On-demand content editor - no VPS, no standing tunnel key. filebrowser (a
+# web file manager, similar to the old aaPanel one) runs on the runner and is
+# published at a throwaway *.trycloudflare.com URL via cloudflared's
+# zero-config quick-tunnel mode - no Cloudflare account or DNS zone needed
+# for the tunnel itself. Edits are auto-committed back to this repo, which
+# Cloudflare Pages (project diamondbarevergreen-com) deploys automatically
+# once connected via its own native Git integration.
+
+on:
+  workflow_dispatch:
+    inputs:
+      fb_password:
+        description: "Password for this session's file manager login (username is 'conan')"
+        required: true
+      idle_minutes:
+        description: "Minutes of inactivity before the session shuts down"
+        default: "15"
+
+concurrency:
+  group: dbec-edit-session
+  cancel-in-progress: false
+
+jobs:
+  session:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+    permissions:
+      contents: write
+    env:
+      FB_USER: conan
+      FB_PASS: ${{ inputs.fb_password }}
+      IDLE_MINUTES: ${{ inputs.idle_minutes }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Edit session
+        run: bash tools/dbec-edit-session.sh
