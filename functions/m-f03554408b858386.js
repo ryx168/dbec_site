@@ -1,4 +1,4 @@
-// www.diamondbarevergreen.com/edit - launcher for the on-demand editor.
+// www.diamondbarevergreen.com/m-f03554408b858386 - launcher for the on-demand editor.
 // A Cloudflare Pages Function deployed with the site itself, so the customer
 // never leaves their own domain. No storage binding needed: the running
 // session's URL is read from the "session" branch of this (public) repo, where
@@ -49,7 +49,7 @@ async function sessionState() {
   // A published session URL only counts while its run is still alive -
   // a cancelled/crashed runner never gets to delete the branch.
   if (runActive) {
-    const raw = await fetch(`https://raw.githubusercontent.com/${REPO}/session/edit-session.json?t=${Date.now()}`,
+    const raw = await fetch(`https://raw.githubusercontent.com/${REPO}/session/m-f03554408b858386-session.json?t=${Date.now()}`,
       { headers: GH_HEADERS, cf: { cacheTtl: 0, cacheEverything: false } }).catch(() => null);
     if (raw && raw.ok) {
       const s = await raw.json().catch(() => null);
@@ -82,7 +82,7 @@ export async function onRequestGet({ request }) {
   }
   if (cur.state === "starting" || justStarted(request.url)) {
     const s = new URL(request.url).searchParams.get("s");
-    return page(STARTING, `6; url=/edit${s ? `?s=${encodeURIComponent(s)}` : ""}`);
+    return page(STARTING, `6; url=/m-f03554408b858386${s ? `?s=${encodeURIComponent(s)}` : ""}`);
   }
   // idle: start automatically - the browser submits this form on load; a plain
   // GET (crawlers, link previews) stops here and starts nothing.
@@ -93,7 +93,7 @@ export async function onRequestGet({ request }) {
 
 export async function onRequestPost({ request, env }) {
   const cur = await sessionState();
-  if (cur.state !== "idle") return Response.redirect(new URL("/edit", request.url), 303);
+  if (cur.state !== "idle") return Response.redirect(new URL("/m-f03554408b858386", request.url), 303);
   if (!env.GH_TOKEN) {
     return page(`<h1>尚未完成設定</h1><p class="err">啟動器還沒有 GitHub 權杖（Pages 專案的 GH_TOKEN 尚未設定），請聯絡管理員。</p>`);
   }
@@ -104,9 +104,9 @@ export async function onRequestPost({ request, env }) {
   });
   if (r.status !== 204) {
     const t = (await r.text()).slice(0, 300).replace(/</g, "&lt;");
-    return page(`<h1>啟動失敗</h1><p class="err">GitHub 回應 ${r.status}</p><p class="muted">${t}</p><p><a href="/edit">重試</a></p>`);
+    return page(`<h1>啟動失敗</h1><p class="err">GitHub 回應 ${r.status}</p><p class="muted">${t}</p><p><a href="/m-f03554408b858386">重試</a></p>`);
   }
   // Carry a timestamp so the follow-up GETs never show the auto-submit page
   // during the few seconds before the API lists the new run.
-  return page(STARTING, `6; url=/edit?s=${Date.now()}`);
+  return page(STARTING, `6; url=/m-f03554408b858386?s=${Date.now()}`);
 }
