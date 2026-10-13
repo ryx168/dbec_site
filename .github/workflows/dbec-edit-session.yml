@@ -28,6 +28,7 @@ jobs:
     env:
       FB_USER: conan
       FB_PASS: ${{ secrets.FB_PASS }}
+      FMAUTH_KEY: ${{ secrets.FMAUTH_KEY }}
       IDLE_MINUTES: ${{ inputs.idle_minutes }}
     steps:
       - uses: actions/checkout@v4

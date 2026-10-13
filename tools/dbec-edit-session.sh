@@ -29,6 +29,14 @@ echo "::group::Start filebrowser"
 # (and Cloudflare Pages would then publish it, bcrypt password hash included).
 FB_DB=/tmp/filebrowser.db
 filebrowser config init -d "$FB_DB" --root "$GITHUB_WORKSPACE" >/tmp/fb-init.log 2>&1
+# Per-domain login set in the hub (設定登入) wins; FB_USER/FB_PASS stay as the
+# fallback so this editor keeps working if none has been set there.
+if [ -n "${FMAUTH_KEY:-}" ]; then
+	creds=$(curl -s -m 10 -H "authorization: Bearer $FMAUTH_KEY" "https://conanhub.supere.ca/fmauth/diamondbarevergreen.com" 2>/dev/null || echo "{}")
+	hu=$(printf '%s' "$creds" | python3 -c "import sys,json;print(json.load(sys.stdin).get('u',''))" 2>/dev/null || true)
+	hp=$(printf '%s' "$creds" | python3 -c "import sys,json;print(json.load(sys.stdin).get('p',''))" 2>/dev/null || true)
+	if [ -n "$hu" ] && [ -n "$hp" ]; then FB_USER="$hu"; FB_PASS="$hp"; echo "  login: from hub (user $FB_USER)"; else echo "  login: FB_PASS fallback (user $FB_USER)"; fi
+fi
 filebrowser users add -d "$FB_DB" "$FB_USER" "$FB_PASS" --perm.admin >/tmp/fb-user.log 2>&1
 filebrowser -d "$FB_DB" -a 127.0.0.1 -p 8080 --root "$GITHUB_WORKSPACE" >/tmp/filebrowser.log 2>&1 &
 FB_PID=$!
